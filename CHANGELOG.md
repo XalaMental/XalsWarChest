@@ -1,5 +1,15 @@
 # Xal's Warchest - Changelog
 
+## 1.0.1 - 2026-10-23
+
+---
+
+I built the Keep so Reins, Warchest, Emporium and Armoire can live in one window instead of four separate ones, and this update gets Warchest ready for it. If you have the Keep installed, Warchest now tucks in under it: one minimap button and one zone alert for the whole collection, and the zone alert opens Warchest right on the Zone tab. If you don't have the Keep, nothing changes. It's also updated for the current live patch and the upcoming test-realm patch. Thanks for being part of the Xal family.
+
+### 🆕 New
+- Works with Xal's Keep. With the Keep installed, its one minimap button and one zone alert cover Warchest too, and the zone alert opens Warchest straight on the Zone tab. Without the Keep, nothing changes.
+- Updated for the current live patch and the upcoming test-realm patch.
+
 ## 1.0.0 - 2026-10-08
 
 ---
