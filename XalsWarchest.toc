@@ -1,0 +1,34 @@
+## Interface: 120100, 120105, 120007
+## Title: Xal's Warchest
+## Version: @project-version@
+## Notes: A weapon appearance tracker - the counterpart to Xal's Armoire, weapons only.
+## Author: XalaMental
+## X-License: All Rights Reserved
+## X-Curse-Project-ID: 1663267
+## SavedVariables: XalsWarchestDB
+## SavedVariablesPerCharacter: XalsWarchestCharDB
+## IconTexture: Interface\AddOns\XalsWarchest\Icon.png
+## OptionalDeps: XalsKeep
+
+libs\LibStub\LibStub.lua
+libs\CallbackHandler\CallbackHandler-1.0.lua
+libs\LibDataBroker\LibDataBroker-1.1.lua
+libs\LibDBIcon\LibDBIcon-1.0.lua
+
+Bootstrap.lua
+BrandStyle.lua
+AchievementSources.lua
+ProfessionSources.lua
+QuestSources.lua
+VendorSources.lua
+InstanceSources.lua
+AppearanceData.lua
+WhatsNew.lua
+Engine.lua
+MainTracker.lua
+AppearanceDetail.lua
+CollectionWindow.lua
+MinimapButton.lua
+ZoneAlertIcon.lua
+SettingsPanel.lua
+ChatCommands.lua
