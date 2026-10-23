@@ -44,6 +44,12 @@ local function ZoneEntries()
     return matches
 end
 
+-- Xal's Keep installed: the Keep's rook is the one zone alert for the whole
+-- collection suite. This icon never shows; the rook asks this count instead.
+if XalsKeep and XalsKeep.RegisterZoneCount then
+    XalsKeep:RegisterZoneCount("warchest", function() return #ZoneEntries() end)
+end
+
 local function BuildIcon()
     if icon then return icon end
 
@@ -159,6 +165,12 @@ local function IsEnabled()
 end
 
 function Alert:UpdateVisibility()
+    if XalsKeep then
+        if icon then icon:Hide() end
+        XalsKeep:ZoneUpdated()
+        return
+    end
+
     local matches = IsEnabled() and ZoneEntries() or {}
 
     if #matches == 0 then
