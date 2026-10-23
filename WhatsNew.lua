@@ -20,9 +20,12 @@ local Brand = addonTable.BrandStyle
 -- ── Update this block every release to match CHANGELOG.md ──────
 W.WHATS_NEW = {
     date = "October 2026",
-    intro = "Xal's Warchest is live - a weapon appearance tracker, same idea as Xal's Armoire but for weapons.",
+    intro = "",
     sections = {
-        { heading = "New", items = { "First release." } },
+        { heading = "New", items = {
+            "Works with Xal's Keep. With the Keep installed, its one minimap button and one zone alert cover Warchest too, and the zone alert opens Warchest straight on the Zone tab.",
+            "Updated for the current live patch and the upcoming test-realm patch.",
+        } },
     },
 }
 
