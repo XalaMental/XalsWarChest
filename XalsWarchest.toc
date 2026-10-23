@@ -1,4 +1,4 @@
-## Interface: 120100, 120105, 120007
+## Interface: 120100, 120105, 120107, 120007
 ## Title: Xal's Warchest
 ## Version: @project-version@
 ## Notes: A weapon appearance tracker - the counterpart to Xal's Armoire, weapons only.
