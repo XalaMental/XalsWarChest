@@ -358,6 +358,8 @@ local function BuildWindow()
             end
         end
     end
+    -- Reachable from Tracker:ShowZoneOnly(), outside this build closure.
+    f.UpdateTabLook = UpdateTabLook
 
     local previousTab
     for i = 1, #TABS do
@@ -632,11 +634,27 @@ local function ShowInKeep()
     StartResolving()
 end
 
+-- Opens on the Zone tab - the Keep's rook zone alert lands here.
+function Tracker:ShowZoneOnly()
+    local f = BuildWindow()
+    if activeTab ~= "zone" then
+        activeTab = "zone"
+        if type(XalsWarchestDB) == "table" then XalsWarchestDB.activeTab = "zone" end
+        f.UpdateTabLook()
+    end
+    if XalsKeep then return XalsKeep:Show(KEEP_KEY) end
+    self:Refresh()
+    f:Show()
+    StartResolving()
+end
+
 if XalsKeep and XalsKeep.Register then
     XalsKeep:Register(KEEP_KEY, {
-        label  = "Warchest",
-        attach = AttachToKeep,
-        show   = ShowInKeep,
+        label    = "Warchest",
+        addon    = "XalsWarchest",
+        attach   = AttachToKeep,
+        show     = ShowInKeep,
+        showZone = function() Tracker:ShowZoneOnly() end,
     })
 end
 
