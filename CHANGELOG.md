@@ -1,5 +1,27 @@
 # Xal's Warchest - Changelog
 
+## 1.1.0 - 2026-11-16
+
+---
+
+I've been playing WoW Forever lately, and I kept wishing Warchest was there too, so that's the big one: it now runs on Forever, with every vanilla weapon you're missing and where each one comes from. While I was in there I went after the things I wanted from it myself. There's a small chest on loot, rolls, vendors and quest rewards so you can see at a glance when a weapon is one you're missing, a line on the tooltip, favorites, six color skins, and open-world drops on Retail. On Forever there's also a button on vendor weapons that points you to the nearest vendor, and if you have Shortest Path Forever it draws a real walking route there. Thanks for being part of the Xal family.
+
+### 🆕 New
+- Warchest now runs on WoW Forever, with every vanilla weapon you're missing: boss drops in every dungeon and raid, quest rewards and who starts them, vendors, crafted weapons and open-world drops.
+- Go to nearest vendor (WoW Forever): a link on vendor weapons that points you to the closest vendor for your faction, with an arrow, a minimap pin and a line. Install Shortest Path Forever (optional) and it plans a real walking route instead.
+- A small chest marks weapons you're missing on loot, group-loot rolls, vendor items and quest rewards, and weapon tooltips tell you whether you have the look. Turn either off on the new Items page in settings.
+- Favorites: right-click a weapon to pin it. Favorites float to the top with a star.
+- Six color skins, on the new Skin page in settings. Every window changes right away.
+- The settings window has a card for each setting and fits its page.
+- Open-world drops (Retail): rares and creatures that drop weapons out in the world, with their zones.
+- Left-clicking the zone alert icon now opens the tracker, the same as right-clicking it.
+- My Collection has an All weapons option.
+
+### 🔧 Fixed
+- The weapon window and the what's-new window now fit their text instead of running off the edge or stacking lines on top of each other.
+- The zone alert icon now shows up as soon as your weapon list is ready, instead of waiting for you to change zones (WoW Forever).
+- The Raids and Dungeons tabs no longer error on WoW Forever.
+
 ## 1.0.1 - 2026-10-23
 
 ---
@@ -26,3 +48,4 @@ Xal's Armoire handles the armor side of transmog, and I kept wishing there was s
 - A minimap button: left-click opens the tracker, right-click opens settings.
 - A settings window with a sidebar, matching the rest of Xal's addons.
 - If you have Xal's Keep installed, the tracker opens inside it as one of its tabs.
+
