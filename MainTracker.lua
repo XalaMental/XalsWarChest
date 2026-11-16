@@ -71,12 +71,14 @@ local function AcquireRow(index)
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     row.icon = icon
 
-    local source = Brand.FS(row, "", Brand.BODY_FONT_PATH, 11, nil, 0.6, 0.6, 0.6)
+    local source = Brand.FS(row, "", Brand.BODY_FONT_PATH, 11, nil,
+        Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
     source:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     source:SetJustifyH("RIGHT")
     row.sourceText = source
 
-    local name = Brand.FS(row, "", Brand.BODY_FONT_PATH, 13, nil, 1, 1, 1)
+    local name = Brand.FS(row, "", Brand.BODY_FONT_PATH, 13, nil,
+        Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
     name:SetPoint("LEFT", icon, "RIGHT", 8, 0)
     name:SetPoint("RIGHT", source, "LEFT", -6, 0)
     name:SetJustifyH("LEFT")
@@ -85,12 +87,27 @@ local function AcquireRow(index)
 
     row:SetScript("OnEnter", function(self) self.highlight:Show() end)
     row:SetScript("OnLeave", function(self) self.highlight:Hide() end)
-    row:SetScript("OnClick", function(self)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:SetScript("OnClick", function(self, button)
         if self.sectionKey then
             SetCollapsed(self.sectionKey, not IsCollapsed(self.sectionKey))
             Tracker:Refresh()
         elseif self.entry then
-            addonTable.AppearanceDetail:Show(self.entry)
+            if button == "RightButton" then
+                local entry = self.entry
+                local isFav = Data:IsFavorite(entry.visualID)
+                Brand.ShowContextMenu({
+                    {
+                        label = isFav and "Remove from Favorites" or "Add to Favorites",
+                        onClick = function()
+                            Data:ToggleFavorite(entry.visualID)
+                            Tracker:Refresh()
+                        end,
+                    },
+                })
+            else
+                addonTable.AppearanceDetail:Show(self.entry)
+            end
         end
     end)
 
@@ -129,10 +146,15 @@ local function BuildDisplayList(todo)
         local flat = {}
         for i = 1, #todo do flat[#flat + 1] = todo[i] end
 
-        -- Alphabetical, because that's how people look for a piece by
-        -- name. Anything still waiting on its name from the server sorts
-        -- to the bottom rather than jumbling the middle of the list.
+        -- Favorites always float to the top - if you bothered to pin it, you
+        -- want to see it without hunting. Below them, alphabetical, because
+        -- that's how people look for a piece by name. Anything still waiting
+        -- on its name from the server sorts to the bottom rather than
+        -- jumbling the middle of the list.
         table.sort(flat, function(a, b)
+            local afav, bfav = Data:IsFavorite(a.visualID), Data:IsFavorite(b.visualID)
+            if afav ~= bfav then return afav end
+
             local an, bn = a.name, b.name
             if an and bn then return an < bn end
             if an then return true end
@@ -190,7 +212,7 @@ local function FillRows()
 
             if item.sectionName then
                 row.icon:SetTexture(nil)
-                row.sourceText:SetText("|cff999999" .. (item.count or 0) .. "|r")
+                row.sourceText:SetText(Brand.HEX.DESC .. (item.count or 0) .. "|r")
                 local prefix = (item.collapsed and "+  " or "-  ")
                 row.nameText:SetText(prefix .. item.sectionName)
                 row.nameText:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
@@ -201,15 +223,22 @@ local function FillRows()
                 Data:RequestName(entry)
                 row.icon:SetTexture(entry.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
 
-                row.nameText:SetText(entry.name
-                    or (entry.nameFailed and "|cff777777Name unavailable|r")
-                    or "|cff777777Loading...|r")
-                row.nameText:SetTextColor(1, 1, 1)
+                -- A pinned favorite gets a star prefix right on the name -
+                -- cheaper than a separate icon in an already-tight row.
+                local favPrefix = ""
+                if Data:IsFavorite(entry.visualID) then
+                    favPrefix = Brand.HEX.ACCENT .. "\226\152\133 |r"
+                end
+
+                row.nameText:SetText(favPrefix .. (entry.name
+                    or (entry.nameFailed and (Brand.HEX.MUTED .. "Name unavailable|r"))
+                    or (Brand.HEX.MUTED .. "Loading...|r")))
+                row.nameText:SetTextColor(Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
 
                 local n = entry.sourceIDs and #entry.sourceIDs or 0
                 if n > 1 then
                     row.sourceText:SetText(Data:SourceLabel(entry.sourceType) ..
-                        "  |cff777777(" .. n .. ")|r")
+                        "  " .. Brand.HEX.MUTED .. "(" .. n .. ")|r")
                 else
                     row.sourceText:SetText(Data:SourceLabel(entry.sourceType))
                 end
@@ -241,7 +270,7 @@ function Tracker:Refresh()
         end
     end
     if slotLink and slotLink.label then
-        slotLink.label:SetText(catName .. "  |cff681417v|r")
+        slotLink.label:SetText(catName .. "  " .. Brand.HEX.ACCENT .. "v|r")
         slotLink.label:ClearAllPoints()
         slotLink.label:SetPoint("RIGHT", slotLink, "RIGHT", 0, 0)
         slotLink:SetWidth(math.max(40, slotLink.label:GetStringWidth() + 8))
@@ -265,21 +294,22 @@ function Tracker:Refresh()
     end
 
     local stats = Data.stats
+    local dim = Brand.HEX.DESC
     if Data.resolvingAll then
-        countText:SetText("|cff999999Reading your collection...|r")
+        countText:SetText(dim .. "Reading your collection...|r")
     elseif typedText ~= "" then
         countText:SetText(#todo .. " match" .. (#todo == 1 and "" or "es") ..
-            "  |cff999999across all weapons|r")
+            "  " .. dim .. "across all weapons|r")
     elseif activeTab == "raids" then
         countText:SetText(shown .. " still to get from raids")
     elseif activeTab == "dungeons" then
         countText:SetText(shown .. " still to get from dungeons")
     elseif activeTab == "zone" then
-        countText:SetText(#todo .. " still to get  |cff999999in this zone|r")
+        countText:SetText(#todo .. " still to get  " .. dim .. "in this zone|r")
     elseif slotFilter then
-        countText:SetText(#todo .. " to collect  |cff999999in " .. catName .. "|r")
+        countText:SetText(#todo .. " to collect  " .. dim .. "in " .. catName .. "|r")
     elseif stats then
-        countText:SetText(#todo .. " to collect  |cff999999(" ..
+        countText:SetText(#todo .. " to collect  " .. dim .. "(" ..
             stats.collected .. " of " .. stats.total .. " owned)|r")
     else
         countText:SetText(#todo .. " to collect")
@@ -336,10 +366,12 @@ local function BuildWindow()
 
     Brand.Title(f, "Weapons to Collect", 22, "TOP", f, "TOP", 0, -Brand.SAFE_MARGIN - 4)
 
-    countText = Brand.FS(f, "", Brand.BODY_FONT_PATH, 12, nil, 0.6, 0.6, 0.6)
+    countText = Brand.FS(f, "", Brand.BODY_FONT_PATH, 12, nil,
+        Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
     countText:SetPoint("TOP", f, "TOP", 0, -44)
 
-    -- Tabs. Text links, active one white, the others accent. Zone leads -
+    -- Tabs. Text links, the active one in the skin's selected-tab color, the
+    -- others in its muted tab color - one clear current tab. Zone leads -
     -- "what can I get right here, right now" is the most immediately
     -- actionable question, ahead of browsing the full to-do list.
     local TABS = {
@@ -351,11 +383,8 @@ local function BuildWindow()
 
     local function UpdateTabLook()
         for key, btn in pairs(tabButtons) do
-            if key == activeTab then
-                btn.label:SetTextColor(1, 1, 1, 1)
-            else
-                btn.label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
-            end
+            local c = (key == activeTab) and Brand.TAB_SELECTED_COLOR or Brand.TAB_COLOR
+            btn.label:SetTextColor(c[1], c[2], c[3], 1)
         end
     end
     -- Reachable from Tracker:ShowZoneOnly(), outside this build closure.
@@ -382,18 +411,31 @@ local function BuildWindow()
     end
     UpdateTabLook()
 
-    -- Search box.
-    searchBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-    searchBox:SetHeight(20)
+    -- GetStringWidth() right after SetFont() can read the wrong value for a
+    -- custom TTF the client hasn't loaded into its font cache yet, and the
+    -- bold tab labels are the first thing to use Inter SemiBold - which left
+    -- the tabs measured too narrow and crowding each other (and the weapon-
+    -- type link). Re-measuring one tick later, once the font is loaded, fixes
+    -- it; every tab's LEFT point is a live reference to the previous tab's
+    -- RIGHT edge, so correcting the widths in order cascades the row back
+    -- into place.
+    C_Timer.After(0, function()
+        for i = 1, #TABS do
+            local btn = tabButtons[TABS[i].key]
+            if btn then btn:SetWidth(math.max(40, btn.label:GetStringWidth() + 8)) end
+        end
+    end)
+
+    -- Search box. Brand.MakeEditBox so its fill, border and text follow the skin.
+    searchBox = Brand.MakeEditBox(f, 100, 20)
     searchBox:SetPoint("TOPLEFT", f, "TOPLEFT", Brand.SAFE_MARGIN + 14, -93)
     searchBox:SetPoint("TOPRIGHT", f, "TOPRIGHT", -Brand.SAFE_MARGIN - 4, -93)
     searchBox:SetAutoFocus(false)
-    searchBox:SetFontObject("GameFontHighlightSmall")
 
     local placeholder = searchBox:CreateFontString(nil, "OVERLAY")
     placeholder:SetFont(Brand.BODY_FONT_PATH, 12, "")
-    placeholder:SetTextColor(0.5, 0.5, 0.5)
-    placeholder:SetPoint("LEFT", searchBox, "LEFT", 4, 0)
+    placeholder:SetTextColor(Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
+    placeholder:SetPoint("LEFT", searchBox, "LEFT", 6, 0)
     placeholder:SetText("Search weapons...")
 
     searchBox:SetScript("OnTextChanged", function(self)
@@ -452,7 +494,8 @@ local function BuildWindow()
                 btn:SetScript("OnEnter", function(s) s.highlight:Show() end)
                 btn:SetScript("OnLeave", function(s) s.highlight:Hide() end)
 
-                btn.label = Brand.FS(btn, "", Brand.BODY_FONT_PATH, 12, nil, 1, 1, 1)
+                btn.label = Brand.FS(btn, "", Brand.BODY_FONT_PATH, 12, nil,
+                    Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
                 btn.label:SetPoint("LEFT", btn, "LEFT", 2, 0)
                 btn.label:SetJustifyH("LEFT")
 
@@ -486,7 +529,7 @@ local function BuildWindow()
     scrollTrack:SetPoint("BOTTOMRIGHT", scrollFrame, "BOTTOMRIGHT", 10, 0)
     scrollTrack:SetWidth(8)
     scrollTrack:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
-    scrollTrack:SetBackdropColor(1, 1, 1, 0.08)
+    scrollTrack:SetBackdropColor(Brand.TRACK_COLOR[1], Brand.TRACK_COLOR[2], Brand.TRACK_COLOR[3], Brand.TRACK_COLOR[4])
     scrollTrack:Hide()
 
     local scrollThumb = CreateFrame("Slider", nil, scrollTrack)
@@ -683,4 +726,19 @@ end
 function Tracker:IsShown()
     if frame and frame.keepHost then return frame:IsVisible() end
     return frame and frame:IsShown()
+end
+
+-- After a skin change: drops the window and everything built on it, so the next
+-- Show builds it again in the new colors (windows keep the colors they were
+-- built with). Returns whether it was open, so the caller can reopen it. Inside
+-- the Keep the window belongs to the Keep, so it is left alone there.
+function Tracker:ResetSkin()
+    if XalsKeep or not frame then return false end
+    local wasShown = frame:IsShown()
+    frame:Hide()
+    frame, scrollFrame, scrollChild, content, countText, searchBox = nil, nil, nil, nil, nil, nil
+    slotLink, slotList = nil, nil
+    wipe(rows)
+    wipe(tabButtons)
+    return wasShown
 end
