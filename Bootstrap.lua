@@ -12,5 +12,7 @@ addonTable.AppearanceDetail = {}
 addonTable.CollectionWindow = {}
 addonTable.MinimapButton    = {}
 addonTable.ZoneAlertIcon    = {}
+addonTable.ItemMarkers      = {}
+addonTable.Waypoint         = {}
 addonTable.SettingsPanel    = {}
 addonTable.ChatCommands     = {}
