@@ -17,11 +17,13 @@ libs\LibDBIcon\LibDBIcon-1.0.lua
 
 Bootstrap.lua
 BrandStyle.lua
+XalsSkins.lua
 AchievementSources.lua
 ProfessionSources.lua
 QuestSources.lua
 VendorSources.lua
 InstanceSources.lua
+WorldDropSources.lua
 AppearanceData.lua
 WhatsNew.lua
 Engine.lua
@@ -30,5 +32,7 @@ AppearanceDetail.lua
 CollectionWindow.lua
 MinimapButton.lua
 ZoneAlertIcon.lua
+ItemMarkers.lua
+Waypoint.lua
 SettingsPanel.lua
 ChatCommands.lua
