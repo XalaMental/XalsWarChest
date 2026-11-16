@@ -220,6 +220,13 @@ function Data:ResolveEntry(entry)
         end
     end
 
+    -- Still nothing cached client-side - the WoW Forever build ships every
+    -- weapon's real name (ForeverItemNames.lua), so use it directly rather
+    -- than waiting on the game's own item cache.
+    if not entry.name and addonTable.ItemNames and entry.itemID then
+        entry.name = addonTable.ItemNames[entry.itemID]
+    end
+
     -- NOTE: deliberately does NOT ask the server for a missing name here.
     -- Names are requested per ROW instead, by RequestName below, so only
     -- what's actually on screen costs anything (see Armoire's own note on
@@ -394,6 +401,12 @@ function Data:ResolveAll(onProgress)
             ticker:Cancel()
             self.resolvedAll  = true
             self.resolvingAll = false
+            -- The zone alert icon can only count entries that have resolved,
+            -- so it has to be told the moment they have - on Forever nothing
+            -- else (no collection events at login) would ever prompt it.
+            if addonTable.ZoneAlertIcon and addonTable.ZoneAlertIcon.UpdateVisibility then
+                addonTable.ZoneAlertIcon:UpdateVisibility()
+            end
         end
         if onProgress then onProgress(i, total, i >= total) end
     end)
@@ -685,6 +698,12 @@ function Data:GetSourceDetails(entry)
                 drops       = {},
             }
 
+            -- WoW Forever ships every weapon's real name - use it directly
+            -- rather than waiting on the client's own cache at all.
+            if (not row.name or row.name == "") and addonTable.ItemNames and info.itemID then
+                row.name = addonTable.ItemNames[info.itemID]
+            end
+
             -- An item this character has never seen has no name cached, so
             -- ask for it and fill in on the event. The row table itself is
             -- what gets cached below, and FillItemName/FailItemName mutate
@@ -755,7 +774,8 @@ function Data:BuildInstanceIndex()
         end
     end
 
-    if restoreTier then EJ_SelectTier(restoreTier) end
+    -- Forever reports tier 0 (no tier selected), which EJ_SelectTier rejects.
+    if restoreTier and restoreTier >= 1 then EJ_SelectTier(restoreTier) end
 
     if next(kinds) == nil then return nil end
 
@@ -894,6 +914,14 @@ function Data:PlacesFor(entry)
         if q then
             add(q.start)
             add(q.note)
+            add(q.zone)
+        end
+
+        -- Open-world drops and chests (WoW Forever data): the zones they're
+        -- found in.
+        local ds = addonTable.DropSources and addonTable.DropSources[itemID]
+        if ds then
+            for i = 1, #(ds.zones or {}) do add(ds.zones[i]) end
         end
     end
 
@@ -917,6 +945,57 @@ function Data:MatchesCurrentZone(entry, zoneNames)
         end
     end
     return false
+end
+
+-- ── Favorites ────────────────────────────────────────────────
+-- A small, player-picked subset of the to-do list, persisted independently
+-- of collection state. Keyed by visualID - the same identity everything else
+-- in this file uses, so a favorite survives no matter which specific item
+-- ends up granting the look.
+function Data:IsFavorite(visualID)
+    return type(XalsWarchestDB) == "table"
+        and XalsWarchestDB.favorites
+        and XalsWarchestDB.favorites[visualID] == true
+end
+
+function Data:SetFavorite(visualID, state)
+    if type(XalsWarchestDB) ~= "table" then return end
+    XalsWarchestDB.favorites = XalsWarchestDB.favorites or {}
+    if state then
+        XalsWarchestDB.favorites[visualID] = true
+    else
+        XalsWarchestDB.favorites[visualID] = nil
+    end
+end
+
+function Data:ToggleFavorite(visualID)
+    local now = not self:IsFavorite(visualID)
+    self:SetFavorite(visualID, now)
+    return now
+end
+
+-- ── Live status of any item link ─────────────────────────────
+-- Asks the client directly (not the cached to-do list), because loot, vendor
+-- and quest windows hand over an item link and the answer has to be right the
+-- instant something gets collected. Weapons only: anything else returns nil.
+-- Returns "missing" (don't have this look), "collected" (have this exact
+-- item), "shared" (have the look from a different item) or nil.
+function Data:ItemAppearanceStatus(itemInfo)
+    if not itemInfo or not C_TransmogCollection then return nil end
+
+    local instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    local classID = instant and select(6, instant(itemInfo))
+    if classID ~= 2 then return nil end
+
+    local _, sourceID = C_TransmogCollection.GetItemInfo(itemInfo)
+    if not sourceID then return nil end
+
+    local info = C_TransmogCollection.GetAppearanceInfoBySource(sourceID)
+    if not info then return nil end
+
+    if not info.appearanceIsCollected then return "missing" end
+    if info.sourceIsCollected then return "collected" end
+    return "shared"
 end
 
 -- ── Verification ─────────────────────────────────────────────
