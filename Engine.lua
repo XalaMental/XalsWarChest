@@ -8,9 +8,17 @@ local Data   = addonTable.AppearanceData
 
 local frame = CreateFrame("Frame")
 
+-- The family default (Jason, 2026-11-15): Indigo slate. "current" is the
+-- original Crimson look, still one click away in settings.
+local DEFAULT_SKIN = "indigo"
+
 local function EnsureDB()
     if type(XalsWarchestDB) ~= "table" then XalsWarchestDB = {} end
     if type(XalsWarchestCharDB) ~= "table" then XalsWarchestCharDB = {} end
+    -- Skin (colors for every window; see XalsSkins.lua). Applied here, before
+    -- any window is built, so everything picks it up.
+    if XalsWarchestDB.skin == nil then XalsWarchestDB.skin = DEFAULT_SKIN end
+    XalsWarchestDB.skin = addonTable.BrandStyle.ApplySkin(XalsWarchestDB.skin)
 end
 
 function Engine:Init()
@@ -32,6 +40,9 @@ function Engine:Init()
     -- zone match) to work at all, and nothing else guarantees that happens
     -- if the player never opens the tracker window this session.
     addonTable.ZoneAlertIcon:Init()
+
+    -- Markers on loot / vendor / quest items, and the tooltip line.
+    addonTable.ItemMarkers:Init()
 end
 
 frame:RegisterEvent("PLAYER_LOGIN")
