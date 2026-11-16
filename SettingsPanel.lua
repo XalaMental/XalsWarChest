@@ -5,12 +5,11 @@
 -- one, opened by /xwc options) and an entry in Blizzard's own AddOns list
 -- (secondary, so it's findable where people expect it).
 --
--- Structure matches Roster Roundup's real Options.lua, scaled down to this
--- addon's much smaller feature set: header with centered title + divider, a
--- left sidebar of section buttons, content area to the right, a Discord
--- logo pinned to the sidebar's own bottom edge. Only two sections exist
--- right now (Home, Icons) - more get added here as the addon grows, not a
--- redesign each time.
+-- The family settings layout, same as Xal's Reins / Welcome Wagon: a header
+-- with a centered title and divider, a left sidebar of sections with the
+-- Discord logo pinned to its bottom, and one small page per section. Every
+-- setting sits in its own bordered card. The window's height fits whichever
+-- page is open.
 
 local addonName, addonTable = ...
 local SettingsPanel = addonTable.SettingsPanel
@@ -19,9 +18,11 @@ local Brand         = addonTable.BrandStyle
 local PANEL_NAME = "Xal's Warchest"
 
 local SIDEBAR_W = 132
-local CONTENT_W = 280
+local CONTENT_W = 340
 local WIN_W = 14 + SIDEBAR_W + 10 + 2 + 26 + CONTENT_W + 14
-local WIN_H = 420
+-- Height is dynamic: the window fits whichever page is open (FitWindow),
+-- never shorter than the sidebar needs.
+local MIN_H = 400
 
 local RIGHT_MARGIN = 16
 local PANEL_LABEL_FONT_SIZE = 14
@@ -29,179 +30,331 @@ local PANEL_DESC_FONT_SIZE  = 13
 
 local window, rootPanel
 local sidebar, content
+local FitWindow -- defined below
 local sectionButtons = {}
 local activeSection = "Home"
 
--- ── Shared row helpers ────────────────────────────────────────────
-local function AddToggle(parent, anchorTo, yGap, label, description, checked, onToggle)
-    local cb = Brand.MakeCheckbox(parent, 20)
-    if anchorTo then
-        cb:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
-    else
-        cb:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-    end
-    cb:SetChecked(checked)
-    cb.OnToggle = onToggle
+local function DB()
+    return type(XalsWarchestDB) == "table" and XalsWarchestDB or {}
+end
 
-    local text = Brand.FS(parent, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
-        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+-- ── Saved on/off settings ────────────────────────────────────────
+-- Every toggle here defaults ON. Read with an explicit ~= false so a fresh
+-- install, where the key is nil rather than true, behaves the same as one
+-- that's been deliberately switched on.
+function SettingsPanel:Get(key)
+    if type(XalsWarchestDB) ~= "table" then return true end
+    return XalsWarchestDB[key] ~= false
+end
+
+function SettingsPanel:Set(key, value)
+    if type(XalsWarchestDB) ~= "table" then return end
+    XalsWarchestDB[key] = value and true or false
+end
+
+-- ── Cards ────────────────────────────────────────────────────────
+-- Every setting lives in its own card - a mini panel with the lighter card
+-- fill and thin border (Brand.ApplyCardBackground + Brand.DrawBorder(card, 0)),
+-- a title, a short divider under it, then the setting's controls. Cards stack
+-- down the page.
+--
+-- Everything inside a card chains off `card.anchor` (the last element added),
+-- so FitCard can size the card from that element's real bottom once the page
+-- has drawn - no GetStringHeight guessing.
+local CARD_PAD = 10
+local CARD_GAP = 12
+local pageCards = {}
+
+local function NewCard(parent, title)
+    local card = CreateFrame("Frame", nil, parent)
+    local prev = pageCards[#pageCards]
+    if prev then
+        card:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -CARD_GAP)
+    else
+        card:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    end
+    card:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
+    card:SetHeight(60) -- placeholder; FitCard sets the real height
+    Brand.ApplyCardBackground(card)
+    Brand.DrawBorder(card, 0)
+
+    if title then
+        local t = Brand.FS(card, title, Brand.BODY_SEMIBOLD_FONT_PATH, 14, nil,
+            Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+        t:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -8)
+
+        local div = card:CreateTexture(nil, "ARTWORK")
+        div:SetColorTexture(Brand.DIVIDER_COLOR[1], Brand.DIVIDER_COLOR[2], Brand.DIVIDER_COLOR[3], 1)
+        div:SetHeight(Brand.LINE_THICKNESS)
+        div:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -30)
+        div:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -30)
+        card.anchor = div
+    else
+        -- Untitled card (Home): content starts from an invisible top edge.
+        local top = card:CreateTexture(nil, "ARTWORK")
+        top:SetColorTexture(0, 0, 0, 0)
+        top:SetHeight(1)
+        top:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -2)
+        top:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -2)
+        card.anchor = top
+    end
+    pageCards[#pageCards + 1] = card
+    return card
+end
+
+-- Places `elem` under the card's last element, flush with the card's left
+-- padding (xNudge shifts it).
+local function Place(card, elem, gap, xNudge)
+    elem:SetPoint("TOPLEFT", card.anchor, "BOTTOMLEFT", xNudge or 0, -gap)
+    card.anchor = elem
+end
+
+local function FitCard(card)
+    local top, bottom = card:GetTop(), card.anchor and card.anchor:GetBottom()
+    if top and bottom then
+        card:SetHeight(math.max(40, (top - bottom) + CARD_PAD + 2))
+    end
+end
+
+-- Wrapped description text.
+local function CardDesc(card, text, gap)
+    local desc = Brand.FS(card, "", Brand.BODY_FONT_PATH, PANEL_DESC_FONT_SIZE, nil,
+        Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
+    desc:SetPoint("RIGHT", card, "RIGHT", -CARD_PAD, 0)
+    desc:SetJustifyH("LEFT")
+    desc:SetWordWrap(true)
+    desc:SetText(text)
+    Place(card, desc, gap)
+    return desc
+end
+
+-- Checkbox + label + description. `onChange(newValue)` is called when it's
+-- clicked.
+local function CardCheck(card, label, description, isChecked, onChange)
+    local cb = Brand.MakeCheckbox(card, 20)
+    cb:SetChecked(isChecked and true or false)
+    cb.OnToggle = function(self)
+        onChange(self:GetChecked() and true or false)
+    end
+    Place(card, cb, 10)
+
+    local text = Brand.FS(card, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
+        Brand.TEXT_COLOR[1], Brand.TEXT_COLOR[2], Brand.TEXT_COLOR[3])
     text:SetPoint("LEFT", cb, "RIGHT", 8, 0)
-    text:SetPoint("RIGHT", parent, "RIGHT", -RIGHT_MARGIN, 0)
+    text:SetPoint("RIGHT", card, "RIGHT", -CARD_PAD, 0)
     text:SetJustifyH("LEFT")
     text:SetWordWrap(true)
 
-    local desc = Brand.FS(parent, description, Brand.BODY_FONT_PATH, PANEL_DESC_FONT_SIZE, nil,
-        0.62, 0.62, 0.62)
-    desc:SetPoint("TOPLEFT", cb, "BOTTOMLEFT", 0, -4)
-    desc:SetPoint("RIGHT", parent, "RIGHT", -RIGHT_MARGIN, 0)
-    desc:SetJustifyH("LEFT")
-    desc:SetWordWrap(true)
+    CardDesc(card, description, 4)
+end
 
-    return desc, cb
+local function CardLink(card, label, onClick)
+    local link = Brand.MakeTextLink(card, label, onClick)
+    Place(card, link, 6, -4)
+    -- Next element lines back up with the card padding, not the link's nudge.
+    local spacer = card:CreateTexture(nil, "ARTWORK")
+    spacer:SetSize(1, 1)
+    spacer:SetColorTexture(0, 0, 0, 0)
+    spacer:SetPoint("TOPLEFT", link, "BOTTOMLEFT", 4, 0)
+    card.anchor = spacer
 end
 
 -- OptionsSliderTemplate's Low/High/Text sub-regions are only reachable via
--- the old global-name convention (_G[name.."Low"] etc), confirmed on Roster
--- Roundup - not exposed as slider.Low/.High/.Text fields directly. Needs a
--- real frame name for this to work.
+-- the old global-name convention (_G[name.."Low"] etc) - needs a real frame
+-- name.
 local sliderNameCounter = 0
-local function AddSlider(parent, anchorTo, yGap, label, min, max, step, value, formatFn, onChange)
-    local lbl = Brand.FS(parent, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
-        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
-    if anchorTo then
-        lbl:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
-    else
-        lbl:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-    end
+local function CardSlider(card, label, min, max, step, value, formatFn, onChange)
+    local lbl = Brand.FS(card, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
+        Brand.TEXT_COLOR[1], Brand.TEXT_COLOR[2], Brand.TEXT_COLOR[3])
+    Place(card, lbl, 12)
 
     sliderNameCounter = sliderNameCounter + 1
     local sliderName = "XalsWarchestSlider" .. sliderNameCounter
-    local slider = CreateFrame("Slider", sliderName, parent, "OptionsSliderTemplate")
-    slider:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 4, -22)
-    slider:SetWidth(CONTENT_W - 40)
+    local slider = CreateFrame("Slider", sliderName, card, "OptionsSliderTemplate")
+    slider:SetWidth(CONTENT_W - CARD_PAD * 2 - 16)
     slider:SetMinMaxValues(min, max)
     slider:SetValueStep(step)
     slider:SetObeyStepOnDrag(true)
+    Place(card, slider, 22, 4)
     slider:SetValue(value)
 
     _G[sliderName .. "Low"]:SetText("")
     _G[sliderName .. "High"]:SetText("")
     _G[sliderName .. "Text"]:SetText(formatFn(value))
-    -- Blizzard's template hardcodes these gold - doesn't read Brand.ACCENT.
+    -- Blizzard's template hardcodes these gold.
     for _, suffix in ipairs({ "Low", "High", "Text" }) do
-        _G[sliderName .. suffix]:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
+        _G[sliderName .. suffix]:SetTextColor(Brand.TEXT_COLOR[1], Brand.TEXT_COLOR[2], Brand.TEXT_COLOR[3])
     end
 
     slider:SetScript("OnValueChanged", function(_, val)
+        val = math.floor(val / step + 0.5) * step
         _G[sliderName .. "Text"]:SetText(formatFn(val))
         onChange(val)
     end)
-
-    return slider, lbl
 end
 
 -- ── Sidebar link selection ───────────────────────────────────────
--- #323264, confirmed muted color for an unselected sidebar link - only the
--- active section reads as "on" instead of every link sitting at full
--- accent color all the time.
-local UNSELECTED_LINK_COLOR = { 0.196, 0.196, 0.392 }
+-- Only the open section reads as "on" (the skin's selected-tab color); every
+-- other link sits in the skin's muted tab color.
 local function SetLinkSelected(btn, selected)
-    local r, g, b = UNSELECTED_LINK_COLOR[1], UNSELECTED_LINK_COLOR[2], UNSELECTED_LINK_COLOR[3]
-    if selected then r, g, b = Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3] end
-    btn.label:SetTextColor(r, g, b, 1)
+    local c = selected and Brand.TAB_SELECTED_COLOR or Brand.TAB_COLOR
+    btn.label:SetTextColor(c[1], c[2], c[3], 1)
     btn.selected = selected
     btn:SetScript("OnLeave", function()
-        local rr, gg, bb = UNSELECTED_LINK_COLOR[1], UNSELECTED_LINK_COLOR[2], UNSELECTED_LINK_COLOR[3]
-        if btn.selected then rr, gg, bb = Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3] end
-        btn.label:SetTextColor(rr, gg, bb, 1)
+        local cc = btn.selected and Brand.TAB_SELECTED_COLOR or Brand.TAB_COLOR
+        btn.label:SetTextColor(cc[1], cc[2], cc[3], 1)
     end)
 end
 
 -- ── Home ─────────────────────────────────────────────────────────
+-- One untitled card holding the icon, lead line, rule and body text, all
+-- centered inside it.
 local function BuildHome(parent)
-    local icon = parent:CreateTexture(nil, "ARTWORK")
+    local card = NewCard(parent, nil)
+
+    local icon = card:CreateTexture(nil, "ARTWORK")
     icon:SetSize(100, 100)
-    icon:SetPoint("TOP", parent, "TOP", 0, 0)
+    icon:SetPoint("TOP", card, "TOP", 0, -14)
     icon:SetTexture("Interface\\AddOns\\XalsWarchest\\Icon.png")
 
-    local lead = Brand.FS(parent, "Every weapon you're still missing, and where it comes from.",
-        Brand.TITLE_FONT_PATH, 16, nil, Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
+    local lead = Brand.FS(card, "Every weapon you're still missing, and where it comes from.",
+        Brand.TITLE_FONT_PATH, 16, nil,
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
     lead:SetPoint("TOP", icon, "BOTTOM", 0, -14)
-    lead:SetWidth(CONTENT_W - 20)
+    lead:SetWidth(CONTENT_W - 40)
     lead:SetJustifyH("CENTER")
     lead:SetWordWrap(true)
 
-    local rule = Brand.T(parent, (CONTENT_W - 50) / 2, 0, 50, Brand.LINE_THICKNESS,
-        Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
-    rule:ClearAllPoints()
-    rule:SetPoint("TOP", lead, "BOTTOM", 0, -14)
+    local rule = card:CreateTexture(nil, "ARTWORK")
+    rule:SetColorTexture(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 1)
     rule:SetSize(50, Brand.LINE_THICKNESS)
+    rule:SetPoint("TOP", lead, "BOTTOM", 0, -14)
 
-    local body = Brand.FS(parent,
+    local body = Brand.FS(card,
         "Xal's Warchest tracks every unique weapon look in the game - drops, "
         .. "vendors, quests, professions, achievements - researched and "
         .. "verified against the game's own data, not guessed. Armoire's "
         .. "counterpart, weapons only.",
-        Brand.BODY_FONT_PATH, 12, nil, 0.85, 0.85, 0.85)
+        Brand.BODY_FONT_PATH, 12, nil,
+        Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
     body:SetPoint("TOP", rule, "BOTTOM", 0, -14)
-    body:SetWidth(CONTENT_W - 10)
+    body:SetWidth(CONTENT_W - 40)
     body:SetJustifyH("CENTER")
     body:SetWordWrap(true)
+    card.anchor = body
+
+    -- With Xal's Keep installed, the Keep's single icon is the minimap button and
+    -- the zone alert for the whole collection suite, so those two settings
+    -- would do nothing here. Say where they live instead of showing dead controls.
+    if XalsKeep then
+        local keep = NewCard(parent, "Xal's Keep")
+        CardDesc(keep, "Xal's Keep is installed, so the minimap button and the zone "
+            .. "alert now live in the Keep. Change them in the Keep's settings.", 10)
+    end
 end
 
 -- ── Icons ────────────────────────────────────────────────────────
 local function BuildIcons(parent)
-    local mmHeader = Brand.FS(parent, "Minimap button", Brand.TITLE_FONT_PATH, 15, nil,
-        Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
-    mmHeader:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    local Alert = addonTable.ZoneAlertIcon
 
-    local mmDesc = AddToggle(parent, mmHeader, -10,
-        "Show the minimap button",
+    local minimap = NewCard(parent, "Minimap button")
+    local hidden = DB().minimap and DB().minimap.hide
+    CardCheck(minimap, "Show the minimap button",
         "Left-click opens the tracker, right-click opens these settings.",
-        not (type(XalsWarchestDB) == "table" and XalsWarchestDB.minimap
-            and XalsWarchestDB.minimap.hide),
-        function(self)
-            addonTable.MinimapButton:SetShown(self:GetChecked() and true or false)
-        end)
+        not hidden,
+        function(value) addonTable.MinimapButton:SetShown(value) end)
 
-    local div = Brand.DrawDivider(parent, 0, 0, CONTENT_W)
-    div:ClearAllPoints()
-    div:SetPoint("TOPLEFT", mmDesc, "BOTTOMLEFT", 0, -14)
-    div:SetPoint("RIGHT", parent, "RIGHT", 0, 0)
-
-    local zaHeader = Brand.FS(parent, "Zone alert icon", Brand.TITLE_FONT_PATH, 15, nil,
-        Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
-    zaHeader:SetPoint("TOPLEFT", div, "BOTTOMLEFT", 0, -14)
-
-    local zaDesc = AddToggle(parent, zaHeader, -10,
-        "Show the zone alert icon",
+    local show = NewCard(parent, "Zone alert icon")
+    CardCheck(show, "Show the zone alert icon",
         "A small floating icon that appears while you're standing in a zone "
-            .. "with a weapon you're still missing.",
-        not (type(XalsWarchestDB) == "table" and XalsWarchestDB.zoneIconHide),
-        function(self)
-            addonTable.ZoneAlertIcon:SetShown(self:GetChecked() and true or false)
-        end)
+        .. "with a weapon you're still missing.",
+        not DB().zoneIconHide,
+        function(value) Alert:SetShown(value) end)
 
-    local scale = (type(XalsWarchestDB) == "table" and XalsWarchestDB.zoneIconScale) or 1.0
-    local slider = AddSlider(parent, zaDesc, -14, "Icon size", 0.5, 2.0, 0.1, scale,
-        function(v) return math.floor(v * 100) .. "%" end,
+    local size = NewCard(parent, "Icon size")
+    CardSlider(size, "Size", 0.5, 2.0, 0.1, tonumber(DB().zoneIconScale) or 1.0,
+        function(v) return math.floor(v * 100 + 0.5) .. "%" end,
         function(v)
             if type(XalsWarchestDB) == "table" then XalsWarchestDB.zoneIconScale = v end
-            addonTable.ZoneAlertIcon:ApplyScale()
+            Alert:ApplyScale()
         end)
 
-    local resetLink = Brand.MakeTextLink(parent, "Reset icon position", function()
-        addonTable.ZoneAlertIcon:ResetPosition()
-    end, 12)
-    resetLink:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", -4, -20)
+    local pos = NewCard(parent, "Icon position")
+    CardDesc(pos, "Drag the icon anywhere on your screen. If it ends up somewhere you "
+        .. "can't find, put it back.", 10)
+    CardLink(pos, "Reset icon position", function() Alert:ResetPosition() end)
 end
 
-local SECTIONS = {
-    { name = "Home",  build = BuildHome },
-    { name = "Icons", build = BuildIcons },
-}
+-- ── Items ────────────────────────────────────────────────────────
+local function BuildItems(parent)
+    local mark = NewCard(parent, "Markers on items")
+    CardCheck(mark, "Mark missing weapons on items",
+        "Puts a small chest icon on loot, group-loot rolls, vendor items and quest "
+        .. "rewards for weapons you don't have the look for yet.",
+        SettingsPanel:Get("markItems"),
+        function(value) SettingsPanel:Set("markItems", value) end)
+
+    local tip = NewCard(parent, "Tooltip line")
+    CardCheck(tip, "Add a line to item tooltips",
+        "Says whether you're missing a weapon's look, or already have it from a "
+        .. "different item.",
+        SettingsPanel:Get("tooltipLine"),
+        function(value) SettingsPanel:Set("tooltipLine", value) end)
+end
+
+-- ── Skin ─────────────────────────────────────────────────────────
+-- Just colors (XalsSkins.lua, shared by every Xal's addon). Picking one
+-- re-colors every Warchest window right away (SettingsPanel:ApplySkinLive).
+local function BuildSkin(parent)
+    local Skins = addonTable.Skins
+    local card = NewCard(parent, "Skin")
+    CardDesc(card, "The colors every Warchest window uses. The layout never changes.", 10)
+    if not Skins then return end
+
+    local COLS, GAP, BTN_H = 2, 8, 26
+    local btnW = math.floor((CONTENT_W - CARD_PAD * 2 - GAP * (COLS - 1)) / COLS)
+    local first, last
+    for i, key in ipairs(Skins.ORDER) do
+        local col, row = (i - 1) % COLS, math.floor((i - 1) / COLS)
+        local btn = Brand.MakeButton(card, Skins.LABELS[key], btnW, BTN_H, function()
+            if key == Brand.skinKey then return end
+            -- The window this button lives in is about to be rebuilt, so wait
+            -- until the click has finished before doing it.
+            C_Timer.After(0, function() SettingsPanel:ApplySkinLive(key) end)
+        end)
+        if not first then
+            Place(card, btn, 10)
+            first = btn
+        else
+            btn:SetPoint("TOPLEFT", first, "TOPLEFT", col * (btnW + GAP), -row * BTN_H)
+        end
+        btn:SetSelected(key == Brand.skinKey)
+        last = btn
+    end
+    -- Size the card to the bottom row, not the first button.
+    card.anchor = last
+
+    if XalsKeep then
+        local note = NewCard(parent, "Inside Xal's Keep")
+        CardDesc(note, "The tracker belongs to the Keep, so it takes the new colors the "
+            .. "next time the game loads. Everything else changes right away.", 10)
+    end
+end
+
+-- The sections shown in the sidebar. Inside Xal's Keep the minimap button and
+-- zone alert are the Keep's, so that page is left out.
+local function GetSections()
+    local list = { { name = "Home", build = BuildHome } }
+    if not XalsKeep then
+        list[#list + 1] = { name = "Icons", build = BuildIcons }
+    end
+    list[#list + 1] = { name = "Items", build = BuildItems }
+    list[#list + 1] = { name = "Skin", build = BuildSkin }
+    return list
+end
 
 local function ClearContent()
+    wipe(pageCards)
     for _, child in ipairs({ content:GetChildren() }) do
         child:Hide()
         child:SetParent(nil)
@@ -211,18 +364,49 @@ local function ClearContent()
     end
 end
 
-local function ShowSection(name)
-    activeSection = name
-    for key, btn in pairs(sectionButtons) do
-        SetLinkSelected(btn, key == name)
-    end
-    ClearContent()
-    for _, section in ipairs(SECTIONS) do
-        if section.name == name then
-            section.build(content)
-            return
+-- Fits the window to the open page: sizes each card to its contents, then
+-- (one frame later, once those new heights have laid out) finds the lowest
+-- visible element in the content area and sizes the window to clear it.
+local function MeasureWindow()
+    if not window or not content then return end
+    local top = window:GetTop()
+    if not top then return end
+    local lowest
+    for _, child in ipairs({ content:GetChildren() }) do
+        if child:IsShown() and child:GetBottom() then
+            lowest = math.min(lowest or child:GetBottom(), child:GetBottom())
         end
     end
+    for _, region in ipairs({ content:GetRegions() }) do
+        if region:IsShown() and region:GetAlpha() > 0 and region:GetBottom() then
+            lowest = math.min(lowest or region:GetBottom(), region:GetBottom())
+        end
+    end
+    if not lowest then return end
+    window:SetHeight(math.max(MIN_H, (top - lowest) + 24 + Brand.SAFE_MARGIN))
+end
+
+FitWindow = function()
+    if not window or not content then return end
+    for _, card in ipairs(pageCards) do FitCard(card) end
+    C_Timer.After(0, MeasureWindow)
+end
+
+local function ShowSection(name)
+    local sections = GetSections()
+    local found
+    for _, section in ipairs(sections) do
+        if section.name == name then found = section break end
+    end
+    if not found then found = sections[1] end
+    activeSection = found.name
+
+    for key, btn in pairs(sectionButtons) do
+        SetLinkSelected(btn, key == activeSection)
+    end
+    ClearContent()
+    found.build(content)
+    C_Timer.After(0, FitWindow)
 end
 
 local function BuildWindow()
@@ -230,7 +414,7 @@ local function BuildWindow()
 
     local f = CreateFrame("Frame", "XalsWarchestOptionsWindow", UIParent)
     tinsert(UISpecialFrames, "XalsWarchestOptionsWindow")
-    f:SetSize(WIN_W, WIN_H)
+    f:SetSize(WIN_W, MIN_H)
     f:SetFrameStrata("HIGH")
     f:SetToplevel(true)
     f:SetMovable(true)
@@ -246,7 +430,7 @@ local function BuildWindow()
     end)
     f:SetClampedToScreen(true)
 
-    local pos = type(XalsWarchestDB) == "table" and XalsWarchestDB.optionsPos or nil
+    local pos = DB().optionsPos
     if pos and pos.point then
         f:SetPoint(pos.point, UIParent, pos.relPoint, pos.x, pos.y)
     else
@@ -284,12 +468,22 @@ local function BuildWindow()
     content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -Brand.SAFE_MARGIN, Brand.SAFE_MARGIN)
     content:SetWidth(CONTENT_W)
 
+    wipe(sectionButtons)
     local y = -32
-    for _, section in ipairs(SECTIONS) do
-        local btn = Brand.MakeTextLink(sidebar, section.name, function() ShowSection(section.name) end)
-        btn:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 4, y)
+    for _, section in ipairs(GetSections()) do
+        local btn = Brand.MakeTextLink(sidebar, section.name, function()
+            ShowSection(section.name)
+        end)
+        -- Left-justified in a fixed-width button so every entry starts at the
+        -- same x instead of centering on its own text width; Inter SemiBold 15.
+        btn.label:SetFont(Brand.BODY_SEMIBOLD_FONT_PATH, 15, "")
+        btn.label:ClearAllPoints()
+        btn.label:SetPoint("LEFT", btn, "LEFT", 0, 0)
+        btn.label:SetJustifyH("LEFT")
+        btn:SetWidth(SIDEBAR_W - 8)
+        btn:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 8, y)
         sectionButtons[section.name] = btn
-        y = y - 24
+        y = y - 28
     end
 
     -- Logo-only Discord link, pinned to the sidebar's own bottom edge so it
@@ -303,6 +497,8 @@ local function BuildWindow()
     return f
 end
 
+-- The AddOns-list entry. Points people at the standalone window rather than
+-- duplicating controls in two places.
 local function BuildCanvasPanel()
     if rootPanel then return rootPanel end
 
@@ -310,11 +506,12 @@ local function BuildCanvasPanel()
     panel.name = PANEL_NAME
 
     local title = Brand.FS(panel, PANEL_NAME, Brand.TITLE_FONT_PATH, 22, nil,
-        Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
     title:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
 
     local blurb = Brand.FS(panel, "A weapon appearance tracker - the counterpart to Xal's Armoire, "
-        .. "weapons only.", Brand.BODY_FONT_PATH, 13, nil, 0.85, 0.85, 0.85)
+        .. "weapons only.", Brand.BODY_FONT_PATH, PANEL_DESC_FONT_SIZE, nil,
+        Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
     blurb:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
     blurb:SetPoint("RIGHT", panel, "RIGHT", -RIGHT_MARGIN, 0)
     blurb:SetJustifyH("LEFT")
@@ -325,6 +522,7 @@ local function BuildCanvasPanel()
     end)
     open:SetPoint("TOPLEFT", blurb, "BOTTOMLEFT", 0, -20)
 
+    panel.title, panel.blurb, panel.open = title, blurb, open
     rootPanel = panel
     return panel
 end
@@ -340,6 +538,39 @@ function SettingsPanel:Init()
     elseif InterfaceOptions_AddCategory then
         InterfaceOptions_AddCategory(rootPanel)
     end
+end
+
+-- Switches skin without a reload. Windows keep the colors they were built with,
+-- so each one is dropped and rebuilt from scratch in the new colors; whichever
+-- were open open again. (Inside Xal's Keep the tracker belongs to the Keep, so
+-- it is left as it is.)
+function SettingsPanel:ApplySkinLive(key)
+    if type(XalsWarchestDB) ~= "table" then return end
+    XalsWarchestDB.skin = Brand.ApplySkin(key)
+
+    local settingsWasOpen = window and window:IsShown()
+    if window then window:Hide() end
+    window = nil
+    Brand.ResetSkinCaches()
+
+    local trackerWasOpen = addonTable.MainTracker:ResetSkin()
+    local collectionWasOpen = addonTable.CollectionWindow:ResetSkin()
+    local detailEntry = addonTable.AppearanceDetail:ResetSkin()
+    if addonTable.ZoneAlertIcon.ApplySkin then addonTable.ZoneAlertIcon:ApplySkin() end
+    addonTable.Waypoint:ApplySkin()
+
+    -- The game's own Esc > Options page (just a title and a button).
+    if rootPanel and rootPanel.title then
+        rootPanel.title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 1)
+        rootPanel.blurb:SetTextColor(Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3], 1)
+        rootPanel.open.label:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 1)
+    end
+
+    local f = BuildWindow()
+    if settingsWasOpen then f:Show() end
+    if trackerWasOpen then addonTable.MainTracker:Show() end
+    if collectionWasOpen then addonTable.CollectionWindow:Toggle() end
+    if detailEntry then addonTable.AppearanceDetail:Show(detailEntry) end
 end
 
 -- The primary entry point: the standalone window.
