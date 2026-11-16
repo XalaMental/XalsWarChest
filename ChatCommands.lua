@@ -180,6 +180,9 @@ function ChatCommands:Handle(input)
     elseif cmd == "collection" then
         addonTable.CollectionWindow:Toggle()
 
+    elseif cmd == "whatsnew" then
+        addonTable.WhatsNew:Show()
+
     elseif cmd == "dump" then
         Data:Dump()
 
