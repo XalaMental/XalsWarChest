@@ -42,12 +42,12 @@ local function AcquireRow(index)
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     row.icon = icon
 
-    local count = Brand.FS(row, "", Brand.BODY_FONT_PATH, 11, nil, 0.6, 0.6, 0.6)
+    local count = Brand.FS(row, "", Brand.BODY_FONT_PATH, 11, nil, Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
     count:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     count:SetJustifyH("RIGHT")
     row.countText = count
 
-    local name = Brand.FS(row, "", Brand.BODY_FONT_PATH, 13, nil, 1, 1, 1)
+    local name = Brand.FS(row, "", Brand.BODY_FONT_PATH, 13, nil, Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
     name:SetPoint("LEFT", icon, "RIGHT", 8, 0)
     name:SetPoint("RIGHT", count, "LEFT", -6, 0)
     name:SetJustifyH("LEFT")
@@ -81,7 +81,7 @@ function Collection:Refresh()
         end
     end
     if slotLink and slotLink.label then
-        slotLink.label:SetText(catName .. "  |cff681417v|r")
+        slotLink.label:SetText(catName .. "  " .. Brand.HEX.ACCENT .. "v|r")
         slotLink.label:ClearAllPoints()
         slotLink.label:SetPoint("LEFT", slotLink, "LEFT", 0, 0)
         slotLink:SetWidth(math.max(40, slotLink.label:GetStringWidth() + 8))
@@ -123,7 +123,7 @@ function Collection:Refresh()
 
     table.sort(display, function(a, b) return (a.name or "") < (b.name or "") end)
     progressText:SetText(resolving and "Reading weapons..." or "")
-    countText:SetText(string.format("%d collected  |cff999999(of %d%s)|r",
+    countText:SetText(string.format("%d collected  " .. Brand.HEX.DESC .. "(of %d%s)|r",
         collected, total, activeCategory and " in this type" or ""))
 
     for i = 1, #display do
@@ -145,8 +145,8 @@ function Collection:Refresh()
         end
 
         row.nameText:SetText(displayName
-            or (e.nameFailed and "|cff777777Name unavailable|r")
-            or "|cff777777Loading...|r")
+            or (e.nameFailed and "" .. Brand.HEX.MUTED .. "Name unavailable|r")
+            or "" .. Brand.HEX.MUTED .. "Loading...|r")
         local n = e.sourceIDs and #e.sourceIDs or 0
         row.countText:SetText(n > 1 and (n .. " items") or "")
         row:Show()
@@ -226,7 +226,7 @@ local function BuildWindow()
 
     Brand.Title(f, "My Collection", 22, "TOP", f, "TOP", 0, -Brand.SAFE_MARGIN - 4)
 
-    countText = Brand.FS(f, "", Brand.BODY_FONT_PATH, 12, nil, 0.6, 0.6, 0.6)
+    countText = Brand.FS(f, "", Brand.BODY_FONT_PATH, 12, nil, Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
     countText:SetPoint("TOP", f, "TOP", 0, -44)
 
     slotLink = Brand.MakeTextLink(f, "Weapon type", function()
@@ -277,11 +277,11 @@ local function BuildWindow()
                 btn:SetScript("OnEnter", function(s) s.highlight:Show() end)
                 btn:SetScript("OnLeave", function(s) s.highlight:Hide() end)
 
-                btn.label = Brand.FS(btn, "", Brand.BODY_FONT_PATH, 12, nil, 1, 1, 1)
+                btn.label = Brand.FS(btn, "", Brand.BODY_FONT_PATH, 12, nil, Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
                 btn.label:SetPoint("LEFT", btn, "LEFT", 2, 0)
                 btn.label:SetJustifyH("LEFT")
 
-                btn.count = Brand.FS(btn, "", Brand.BODY_FONT_PATH, 11, nil, 0.6, 0.6, 0.6)
+                btn.count = Brand.FS(btn, "", Brand.BODY_FONT_PATH, 11, nil, Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
                 btn.count:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
                 btn.count:SetJustifyH("RIGHT")
 
@@ -300,17 +300,16 @@ local function BuildWindow()
         self:SetHeight(16 + #options * SLOT_H)
     end)
 
-    searchBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-    searchBox:SetHeight(20)
+    -- Brand.MakeEditBox so its fill, border and text follow the skin.
+    searchBox = Brand.MakeEditBox(f, 100, 20)
     searchBox:SetPoint("TOPLEFT", f, "TOPLEFT", Brand.SAFE_MARGIN + 14, -93)
     searchBox:SetPoint("TOPRIGHT", f, "TOPRIGHT", -Brand.SAFE_MARGIN - 4, -93)
     searchBox:SetAutoFocus(false)
-    searchBox:SetFontObject("GameFontHighlightSmall")
 
     local placeholder = searchBox:CreateFontString(nil, "OVERLAY")
     placeholder:SetFont(Brand.BODY_FONT_PATH, 12, "")
-    placeholder:SetTextColor(0.5, 0.5, 0.5)
-    placeholder:SetPoint("LEFT", searchBox, "LEFT", 4, 0)
+    placeholder:SetTextColor(Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
+    placeholder:SetPoint("LEFT", searchBox, "LEFT", 6, 0)
     placeholder:SetText("Search what you own...")
 
     searchBox:SetScript("OnTextChanged", function(self)
@@ -323,7 +322,7 @@ local function BuildWindow()
         self:ClearFocus()
     end)
 
-    progressText = Brand.FS(f, "", Brand.BODY_FONT_PATH, 11, nil, 0.6, 0.6, 0.6)
+    progressText = Brand.FS(f, "", Brand.BODY_FONT_PATH, 11, nil, Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
     progressText:SetPoint("TOPLEFT", f, "TOPLEFT", Brand.SAFE_MARGIN + 14, -119)
 
     Brand.DrawDivider(f, 0, 137, WIN_W - (Brand.SAFE_MARGIN * 2), Brand.HEADER_COLOR)
@@ -337,7 +336,7 @@ local function BuildWindow()
     scrollTrack:SetPoint("BOTTOMRIGHT", scrollFrame, "BOTTOMRIGHT", 10, 0)
     scrollTrack:SetWidth(8)
     scrollTrack:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
-    scrollTrack:SetBackdropColor(1, 1, 1, 0.08)
+    scrollTrack:SetBackdropColor(Brand.TRACK_COLOR[1], Brand.TRACK_COLOR[2], Brand.TRACK_COLOR[3], Brand.TRACK_COLOR[4])
     scrollTrack:Hide()
 
     local scrollThumb = CreateFrame("Slider", nil, scrollTrack)
@@ -416,4 +415,17 @@ end
 
 function Collection:IsShown()
     return frame and frame:IsShown()
+end
+
+-- After a skin change: drops the window and everything built on it, so the next
+-- Toggle builds it again in the new colors. Returns whether it was open, so the
+-- caller can reopen it.
+function Collection:ResetSkin()
+    if not frame then return false end
+    local wasShown = frame:IsShown()
+    frame:Hide()
+    frame, scrollFrame, scrollChild, content, countText, searchBox = nil, nil, nil, nil, nil, nil
+    slotLink, slotList, progressText = nil, nil, nil
+    wipe(rows)
+    return wasShown
 end
