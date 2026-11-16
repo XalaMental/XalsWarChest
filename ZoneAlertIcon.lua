@@ -4,8 +4,9 @@
 -- appearance you can actually go and get right now.
 --
 -- Deliberately NOT a persistent icon - there is no "idle" state. If this
--- zone has nothing, there is no icon, full stop. Left-click does nothing
--- yet (reserved). Right-click opens the tracker.
+-- zone has nothing, there is no icon, full stop. Right-click opens the
+-- tracker; left-click does the same for now (no left-click action exists
+-- yet - that changes if one is ever added).
 --
 -- Same glow technique as Armoire's version - Interface\Cooldown\star4, ADD
 -- blend, 2.4x the icon, Brand.ACCENT, 0.35-0.85 alpha bounce over 1.1s.
@@ -122,7 +123,7 @@ local function BuildIcon()
 
     local badgeText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     badgeText:SetPoint("CENTER", badge, "CENTER", 0, 0)
-    badgeText:SetTextColor(1, 1, 1, 1)
+    badgeText:SetTextColor(Brand.ON_ACCENT[1], Brand.ON_ACCENT[2], Brand.ON_ACCENT[3], 1)
     badge.text = badgeText
 
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
@@ -134,10 +135,12 @@ local function BuildIcon()
         end
     end)
 
-    f:SetScript("OnClick", function(self, button)
-        if button == "RightButton" then
-            addonTable.MainTracker:Show()
-        end
+    -- Right-click is the real "open the tracker" action (and what the tooltip
+    -- says). Left-click does the same thing for now, only because the icon has
+    -- no left-click action of its own yet. If the zone alert ever gets one,
+    -- this stops being a catch-all: left-click goes to that, right-click stays.
+    f:SetScript("OnClick", function()
+        addonTable.MainTracker:Show()
     end)
 
     f:SetScript("OnEnter", function(self)
@@ -185,6 +188,16 @@ function Alert:UpdateVisibility()
     if not f.glowAnim:IsPlaying() then f.glowAnim:Play() end
 end
 
+-- After a skin change: recolors the icon that already exists (the glow, the
+-- badge and the badge's number all take the skin's accent).
+function Alert:ApplySkin()
+    if not icon then return end
+    icon.glow:SetVertexColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
+    icon.badgeRing:SetVertexColor(Brand.BG[1], Brand.BG[2], Brand.BG[3])
+    icon.badge:SetVertexColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
+    icon.badge.text:SetTextColor(Brand.ON_ACCENT[1], Brand.ON_ACCENT[2], Brand.ON_ACCENT[3], 1)
+end
+
 -- Backing the Settings checkbox.
 function Alert:SetShown(shown)
     if type(XalsWarchestDB) == "table" then
@@ -227,6 +240,9 @@ end
 function Alert:Init()
     Data:Ensure()
     Alert:UpdateVisibility()
+    -- Entries only count once resolved; start that pass now. ResolveAll
+    -- re-runs UpdateVisibility when it finishes.
+    Data:ResolveAll()
 end
 
 local frame = CreateFrame("Frame")
