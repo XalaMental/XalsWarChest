@@ -8,6 +8,11 @@ ignore:
   - images
   - ArtSource
 
+# Shown on CurseForge as an optional dependency: with Shortest Path Forever
+# installed, "Go to nearest vendor" draws a real walking route (WoW Forever).
+optional-dependencies:
+  - shortest-path-forever
+
 # Use our hand-maintained, styled changelog as the release changelog on
 # CurseForge instead of the packager's auto-generated commit list.
 manual-changelog:
